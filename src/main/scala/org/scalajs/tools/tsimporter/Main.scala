@@ -5,10 +5,11 @@
 
 package org.scalajs.tools.tsimporter
 
-import java.io.{ Console => _, Reader => _, _ }
+import java.io.{Console => _, Reader => _, _}
+import java.nio.file.{Files, Path, Paths}
 
 import scala.collection.immutable.PagedSeq
-
+import scala.collection.JavaConverters._
 import Trees._
 
 import scala.util.parsing.input._
@@ -27,29 +28,48 @@ object Main {
       System.exit(1)
     }
 
-    val inputFileName = args(0)
-    val outputFileName = args(1)
+    val inputPath = Paths.get(args(0))
+    val outputPath = Paths.get(args(1))
     val outputPackage = if (args.length > 2) args(2) else "importedjs"
 
-    importTsFile(inputFileName, outputFileName, outputPackage) match {
-      case Right(()) =>
-        ()
-      case Left(message) =>
-        Console.err.println(message)
-        System.exit(2)
-    }
+    if (Files.isRegularFile(inputPath))
+      importTsFile(inputPath, outputPath, outputPackage) match {
+        case Right(()) =>
+          ()
+        case Left(message) =>
+          Console.err.println(message)
+          System.exit(2)
+      }
+    else if (Files.isDirectory(inputPath) && Files.isDirectory(outputPath))
+      processDir(inputPath, outputPath)
+    else Console.err.println("ERROR")
 }
 
-  def importTsFile(inputFileName: String, outputFileName: String, outputPackage: String): Either[String, Unit] = {
-    parseDefinitions(readerForFile(inputFileName)).map { definitions =>
+  def importTsFile(inputPath: Path, outputPath: Path, outputPackage: String): Either[String, Unit] = {
+    parseDefinitions(readerForFile(inputPath)).map { definitions =>
       val output = new PrintWriter(new BufferedWriter(
-          new FileWriter(outputFileName)))
+          new FileWriter(outputPath.toFile)))
       try {
         process(definitions, output, outputPackage)
         Right(())
       } finally {
         output.close()
       }
+    }
+  }
+
+  private def processDir(inputDir: Path, outputDir: Path): Unit = {
+    val inputFiles = Files.walk(inputDir.toAbsolutePath)
+      .filter(Files.isRegularFile(_))
+      .filter(_.toString.endsWith(".d.ts"))
+      .iterator().asScala.toVector
+    for (inputFile <- inputFiles) {
+      val outputFile = outputDir
+        .resolve(inputDir.toAbsolutePath.relativize(inputFile)) // replace inputDir with outputDir
+        .resolveSibling(inputFile.getFileName.toString.dropRight("d.ts".length) + "scala")  // replace file extension
+      if (!Files.exists(outputFile.getParent)) Files.createDirectories(outputFile.getParent)
+      println("importing " + inputFile)
+      if (!Files.exists(outputFile)) importTsFile(inputFile, outputFile, "importedjs") // TODO package
     }
   }
 
@@ -76,8 +96,8 @@ object Main {
    *
    *  @param fileName name of the file to be read
    */
-  private def readerForFile(fileName: String) = {
+  private def readerForFile(fileName: Path) = {
     new PagedSeqReader(PagedSeq.fromReader(
-        new BufferedReader(new FileReader(fileName))))
+        new BufferedReader(new FileReader(fileName.toFile))))
   }
 }
