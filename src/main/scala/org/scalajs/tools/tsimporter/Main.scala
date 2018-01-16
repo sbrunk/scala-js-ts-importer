@@ -28,8 +28,8 @@ object Main {
       System.exit(1)
     }
 
-    val inputPath = Paths.get(args(0))
-    val outputPath = Paths.get(args(1))
+    val inputPath = Paths.get(args(0)).toAbsolutePath.normalize()
+    val outputPath = Paths.get(args(1)).toAbsolutePath.normalize()
     val outputPackage = if (args.length > 2) args(2) else "importedjs"
 
     if (Files.isRegularFile(inputPath))
@@ -41,8 +41,8 @@ object Main {
           System.exit(2)
       }
     else if (Files.isDirectory(inputPath) && Files.isDirectory(outputPath))
-      processDir(inputPath, outputPath)
-    else Console.err.println("ERROR")
+      processDir(inputPath, outputPath, outputPackage)
+    else Console.err.println("invalid input/output path")
 }
 
   def importTsFile(inputPath: Path, outputPath: Path, outputPackage: String): Either[String, Unit] = {
@@ -58,18 +58,19 @@ object Main {
     }
   }
 
-  private def processDir(inputDir: Path, outputDir: Path): Unit = {
-    val inputFiles = Files.walk(inputDir.toAbsolutePath)
+  private def processDir(inputDir: Path, outputDir: Path, outputPackagePrefix: String): Unit = {
+    val inputFiles = Files.walk(inputDir)
       .filter(Files.isRegularFile(_))
       .filter(_.toString.endsWith(".d.ts"))
       .iterator().asScala.toVector
     for (inputFile <- inputFiles) {
       val outputFile = outputDir
-        .resolve(inputDir.toAbsolutePath.relativize(inputFile)) // replace inputDir with outputDir
+        .resolve(inputDir.relativize(inputFile)) // replace inputDir with outputDir
         .resolveSibling(inputFile.getFileName.toString.dropRight("d.ts".length) + "scala")  // replace file extension
       if (!Files.exists(outputFile.getParent)) Files.createDirectories(outputFile.getParent)
       println("importing " + inputFile)
-      if (!Files.exists(outputFile)) importTsFile(inputFile, outputFile, "importedjs") // TODO package
+      val packageSuffix = inputDir.relativize(inputFile).iterator().asScala.mkString(".").dropRight(".d.ts".length)
+      if (!Files.exists(outputFile)) importTsFile(inputFile, outputFile, outputPackagePrefix + "." + packageSuffix)
     }
   }
 
