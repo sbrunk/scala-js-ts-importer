@@ -47,8 +47,8 @@ class Printer(private val output: PrintWriter, outputPackage: String) {
           val (topLevels, packageObjectMembers) =
             sym.members.partition(canBeTopLevel)
 
-          pln"";
-          pln"package $thisPackage {"
+          //pln"";
+          //pln"package $thisPackage {"
 
           for (sym <- topLevels)
             printSymbol(sym)
@@ -73,8 +73,8 @@ class Printer(private val output: PrintWriter, outputPackage: String) {
             pln"}"
           }
 
-          pln"";
-          pln"}"
+          //pln"";
+          //pln"}"
         }
 
         currentJSNamespace = oldJSNamespace

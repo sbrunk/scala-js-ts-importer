@@ -57,6 +57,9 @@ class TSDefParser extends StdTokenParsers with ImplicitConversions {
     | opt("export") ~> opt("declare") ~> moduleElementDecl1
   ).map(Some(_))
     | "export" ~> lexical.Identifier("as") ~> "namespace" ~> identifier <~ opt(";") ^^^ None
+    | exportDecl ^^^ None
+    | "export" ~> "{" ~> repsep(identifier, ",") <~ "}" <~ opt(lexical.Identifier("from") <~ stringLiteral) <~ opt(";") ^^^ None
+    | "export" ~> "*" ~ opt(lexical.Identifier("from") <~ stringLiteral)  <~ opt(";") ^^^ None
   )
 
   lazy val ambientModuleDecl: Parser[DeclTree] =
@@ -95,7 +98,7 @@ class TSDefParser extends StdTokenParsers with ImplicitConversions {
     "let" ~> identifier ~ optTypeAnnotation <~ opt(";") ^^ LetDecl
 
   lazy val ambientConstDecl: Parser[DeclTree] =
-    "const" ~> identifier ~ optTypeAnnotation <~ opt(";") ^^ ConstDecl
+    "const" ~> identifier ~ opt(typeAnnotation | ("=" ~> (stringType | numberType | booleanType))) <~ opt(";") ^^ ConstDecl
 
   lazy val ambientFunctionDecl: Parser[DeclTree] =
     "function" ~> identifier ~ functionSignature <~ opt(";") ^^ FunctionDecl
@@ -104,7 +107,7 @@ class TSDefParser extends StdTokenParsers with ImplicitConversions {
     "enum" ~> typeName ~ ("{" ~> ambientEnumBody <~ "}") ^^ EnumDecl
 
   lazy val ambientEnumBody: Parser[List[Ident]] =
-    repsep(identifier <~ opt("=" ~ (numericLit | stringLit) ), ",") <~ opt(",")
+    repsep(identifier <~ opt("=" ~ (numericLit | stringLit)), ",") <~ opt(",")
 
   lazy val ambientClassDecl: Parser[DeclTree] =
     (abstractModifier <~ "class") ~ typeName ~ tparams ~ classParent ~ classImplements ~ memberBlock <~ opt(";") ^^ {
@@ -127,6 +130,18 @@ class TSDefParser extends StdTokenParsers with ImplicitConversions {
     ) ~ stringLiteral <~ ";" ^^^ ImportDecl
 
   lazy val importIdentifierSeq =
+    rep1sep(identifier ~ opt(lexical.Identifier("as") ~ identifier), ",")
+
+  lazy val exportDecl: Parser[DeclTree] =
+    "export" ~> opt(
+      (
+        identifier
+          |  "{" ~ exportIdentifierSeq ~ "}"
+          | "*" ~ lexical.Identifier("as") ~ identifier
+        ) ~ opt(lexical.Identifier("from") ~ stringLiteral)
+    ) <~ ";" ^^^ ExportDecl
+
+  lazy val exportIdentifierSeq =
     rep1sep(identifier ~ opt(lexical.Identifier("as") ~ identifier), ",")
 
   lazy val abstractModifier =
@@ -310,7 +325,7 @@ class TSDefParser extends StdTokenParsers with ImplicitConversions {
     }
 
   lazy val privateMember =
-    "private" ~> opt("static") ~> propertyName ~ opt(functionSignature | typeAnnotation) ^^^ PrivateMember
+    "private" ~> modifiers ~> propertyName ~ optionalMarker ~ opt(functionSignature | typeAnnotation) ^^^ PrivateMember
 
   lazy val modifiers: Parser[Modifiers] =
     rep(modifier).map(_.toSet)

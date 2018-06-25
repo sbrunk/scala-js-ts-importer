@@ -70,7 +70,15 @@ object Main {
       if (!Files.exists(outputFile.getParent)) Files.createDirectories(outputFile.getParent)
       println("importing " + inputFile)
       val packageSuffix = inputDir.relativize(inputFile).iterator().asScala.mkString(".").dropRight(".d.ts".length)
-      if (!Files.exists(outputFile)) importTsFile(inputFile, outputFile, outputPackagePrefix + "." + packageSuffix)
+      if (!Files.exists(outputFile)) {
+        importTsFile(inputFile, outputFile, outputPackagePrefix + "." + packageSuffix) match {
+          case Right(()) =>
+            ()
+          case Left(message) =>
+            Console.err.println(message)
+            System.exit(2)
+        }
+      }
     }
   }
 
